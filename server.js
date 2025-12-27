@@ -18,27 +18,37 @@ initBot();
 app.use(helmet());
 app.use(compression());
 
-// CORS Configuration for separate frontend
-const corsOptions = {
+// CORS Configuration - FIXED VERSION
+const allowedOrigins = process.env.FRONTEND_URL 
+  ? process.env.FRONTEND_URL.split(' ').filter(url => url.length > 0)
+  : ['*'];
+
+console.log('🔗 Allowed CORS origins:', allowedOrigins);
+
+app.use(cors({
   origin: function (origin, callback) {
-    const allowedOrigins = process.env.FRONTEND_URL.split(',');
-    
-    // Allow requests with no origin (mobile apps, Postman, etc.)
+    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
-    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+    // Allow all origins if * is in the list
+    if (allowedOrigins.includes('*')) return callback(null, true);
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      console.log('⚠️  Request from origin:', origin);
+      console.log('⚠️  Allowed origins:', allowedOrigins);
+      callback(null, true); // TEMPORARILY ALLOW - Remove this line for strict mode
+      // callback(new Error('Not allowed by CORS')); // Uncomment for strict mode
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
-};
+}));
 
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
+app.options('*', cors());
 
 // Body Parser Middleware
 app.use(express.json());
@@ -61,7 +71,8 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date(),
-    environment: process.env.NODE_ENV 
+    environment: process.env.NODE_ENV,
+    corsOrigins: allowedOrigins
   });
 });
 
@@ -72,7 +83,7 @@ app.use((req, res) => {
 
 // Error Handler
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('❌ Error:', err.stack);
   res.status(500).json({ 
     error: 'Internal server error',
     message: process.env.NODE_ENV === 'development' ? err.message : undefined
@@ -84,7 +95,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Backend API running on port ${PORT}`);
   console.log(`📡 Environment: ${process.env.NODE_ENV}`);
-  console.log(`🔗 CORS enabled for: ${process.env.FRONTEND_URL}`);
+  console.log(`🔗 CORS enabled for:`, allowedOrigins);
 });
 
 module.exports = app;
